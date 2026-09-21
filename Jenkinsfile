@@ -110,7 +110,7 @@ pipeline {
                         echo "Deploying ${env.APP_NAME} on port ${env.HOST_PORT}..."
                         bat "docker rm -f ${env.APP_NAME} 2>NUL || exit /b 0"
 
-                        bat 'docker run -d --name ' + env.APP_NAME + ' --network ' + env.NETWORK + ' -p ' + env.HOST_PORT + ':8080 -e ENVIRONMENT=' + params.ENVIRONMENT + ' -e APP_VERSION=' + params.VERSION + ' -e DB_HOST=' + env.DB_NAME + ' -e DB_NAME=customer_db -e DB_USER=postgres -e DB_PASSWORD=%DB_PWD% customer-app:' + params.VERSION
+                        bat 'docker run -d --name ' + env.APP_NAME + ' --network ' + env.NETWORK + ' -p ' + env.HOST_PORT + ':8080 -e ENVIRONMENT=' + params.ENVIRONMENT + ' -e APP_VERSION=' + params.VERSION + ' -e DB_HOST=unreachable-database-host -e DB_NAME=customer_db -e DB_USER=postgres -e DB_PASSWORD=%DB_PWD% customer-app:' + params.VERSION
 
                         echo "Waiting 10 seconds for container startup..."
                         sleep time: 10, unit: 'SECONDS'
