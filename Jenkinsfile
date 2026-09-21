@@ -75,28 +75,23 @@ pipeline {
 
         stage('Network and Volume Setup') {
             steps {
-                bat """
-                    docker network create ${env.NETWORK} 2>NUL || exit /b 0
-                    docker volume create ${env.VOLUME_NAME} 2>NUL || exit /b 0
-                """
+                bat "docker network create ${env.NETWORK} 2>NUL || exit /b 0"
+                bat "docker volume create ${env.VOLUME_NAME} 2>NUL || exit /b 0"
             }
         }
 
         stage('Deploy Database') {
             steps {
                 script {
-                    bat """
-                        docker inspect ${env.DB_NAME} >nul 2>&1 || ^
-                        docker run -d --name ${env.DB_NAME} ^
-                            --network ${env.NETWORK} ^
-                            -v ${env.VOLUME_NAME}:/var/lib/postgresql/data ^
-                            -e POSTGRES_DB=customer_db ^
-                            -e POSTGRES_USER=postgres ^
-                            -e POSTGRES_PASSWORD=${env.DB_PWD} ^
-                            postgres:16-alpine
-                    """
-                    echo "Waiting 8 seconds for database service initialization..."
-                    sleep time: 8, unit: 'SECONDS'
+                    // Check if DB container already exists; start if not running
+                    def dbExists = bat(script: "docker ps -a --filter name=^/${env.DB_NAME}\$ -q", returnStdout: true).trim()
+                    if (!dbExists) {
+                        bat 'docker run -d --name ' + env.DB_NAME + ' --network ' + env.NETWORK + ' -v ' + env.VOLUME_NAME + ':/var/lib/postgresql/data -e POSTGRES_DB=customer_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=%DB_PWD% postgres:16-alpine'
+                    } else {
+                        bat "docker start ${env.DB_NAME} 2>NUL || exit /b 0"
+                    }
+                    echo "Waiting 10 seconds for database service initialization..."
+                    sleep time: 10, unit: 'SECONDS'
                 }
             }
         }
@@ -114,18 +109,7 @@ pipeline {
                         echo "Deploying ${env.APP_NAME} on port ${env.HOST_PORT}..."
                         bat "docker rm -f ${env.APP_NAME} 2>NUL || exit /b 0"
 
-                        bat """
-                            docker run -d --name ${env.APP_NAME} ^
-                                --network ${env.NETWORK} ^
-                                -p ${env.HOST_PORT}:8080 ^
-                                -e ENVIRONMENT=${params.ENVIRONMENT} ^
-                                -e APP_VERSION=${params.VERSION} ^
-                                -e DB_HOST=${env.DB_NAME} ^
-                                -e DB_NAME=customer_db ^
-                                -e DB_USER=postgres ^
-                                -e DB_PASSWORD=${env.DB_PWD} ^
-                                customer-app:${params.VERSION}
-                        """
+                        bat 'docker run -d --name ' + env.APP_NAME + ' --network ' + env.NETWORK + ' -p ' + env.HOST_PORT + ':8080 -e ENVIRONMENT=' + params.ENVIRONMENT + ' -e APP_VERSION=' + params.VERSION + ' -e DB_HOST=' + env.DB_NAME + ' -e DB_NAME=customer_db -e DB_USER=postgres -e DB_PASSWORD=%DB_PWD% customer-app:' + params.VERSION
 
                         echo "Waiting 10 seconds for container startup..."
                         sleep time: 10, unit: 'SECONDS'
@@ -145,18 +129,8 @@ pipeline {
                         echo "=========================================================="
 
                         bat "docker rm -f ${env.APP_NAME} 2>NUL || exit /b 0"
-                        bat """
-                            docker run -d --name ${env.APP_NAME} ^
-                                --network ${env.NETWORK} ^
-                                -p ${env.HOST_PORT}:8080 ^
-                                -e ENVIRONMENT=${params.ENVIRONMENT} ^
-                                -e APP_VERSION=5.0 ^
-                                -e DB_HOST=${env.DB_NAME} ^
-                                -e DB_NAME=customer_db ^
-                                -e DB_USER=postgres ^
-                                -e DB_PASSWORD=${env.DB_PWD} ^
-                                customer-app:5.0
-                        """
+                        bat 'docker run -d --name ' + env.APP_NAME + ' --network ' + env.NETWORK + ' -p ' + env.HOST_PORT + ':8080 -e ENVIRONMENT=' + params.ENVIRONMENT + ' -e APP_VERSION=5.0 -e DB_HOST=' + env.DB_NAME + ' -e DB_NAME=customer_db -e DB_USER=postgres -e DB_PASSWORD=%DB_PWD% customer-app:5.0'
+
                         sleep time: 8, unit: 'SECONDS'
                         bat "curl --fail http://localhost:${env.HOST_PORT}/health"
                         echo "Rollback restored customer-app:5.0 on port ${env.HOST_PORT}."
