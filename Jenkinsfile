@@ -83,14 +83,15 @@ pipeline {
         stage('Deploy Database') {
             steps {
                 script {
-                    // Check if DB container already exists; start if not running
-                    def dbExists = bat(script: "docker ps -a --filter name=^/${env.DB_NAME}\$ -q", returnStdout: true).trim()
-                    if (!dbExists) {
+                    def checkDb = bat(script: "docker inspect ${env.DB_NAME} >nul 2>&1", returnStatus: true)
+                    if (checkDb != 0) {
+                        echo "Starting fresh DB container ${env.DB_NAME}..."
                         bat 'docker run -d --name ' + env.DB_NAME + ' --network ' + env.NETWORK + ' -v ' + env.VOLUME_NAME + ':/var/lib/postgresql/data -e POSTGRES_DB=customer_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=%DB_PWD% postgres:16-alpine'
                     } else {
+                        echo "Starting existing DB container ${env.DB_NAME}..."
                         bat "docker start ${env.DB_NAME} 2>NUL || exit /b 0"
                     }
-                    echo "Waiting 10 seconds for database service initialization..."
+                    echo "Waiting 10 seconds for DB readiness..."
                     sleep time: 10, unit: 'SECONDS'
                 }
             }
